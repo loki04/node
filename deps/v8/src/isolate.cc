@@ -4300,13 +4300,17 @@ void Isolate::trace_exit()
     it2.Advance();
   }
 
-  Chains& chains = _trace_chain_map[hash];
-
-  std::pair<std::set<std::vector<int>>::iterator, bool> result = chains.chains.insert(v);
+  std::pair<chainlist_t::iterator, bool> result = _trace_chains.insert(std::pair<chain_t, int>(v, _trace_chains.size()));
+  int current_chain_id = result.first->second;
 
   if (result.second) {
-    _trace_chains.push_back(&(*result.first));
+    _chain_follows.push_back(idset_t());
   }
+
+  if (_trace_chains.size() > 1) {
+    _chain_follows[_last_chain_id].insert(current_chain_id);
+  }
+  _last_chain_id = current_chain_id;
 }
 
 void Isolate::trace_print()
@@ -4320,11 +4324,12 @@ void Isolate::trace_print()
 
   FILE *file = fopen(file_name, "w");
 
+  PrintF(file, "{\n");
+
   // Stage 1: print nodes
   {
     PrintF(file, "{\n\"directed\": true,\n\"multigraph\": false,\n\"nodes\": [\n");
 
-    std::map<int, char*>::iterator it, end;
     int n = _trace_nodes.size();;
     for (int i = 0; i < n; i++) {
       if (i != 0) {
@@ -4339,24 +4344,60 @@ void Isolate::trace_print()
   {
     PrintF(file, "\n],\n\"call_chains\": [\n");
 
-    int size = _trace_chains.size();
-    for (int i = 0; i < size; i++) {
-      if (i != 0) {
-        PrintF(file, ",\n");
-      }
+    chainlist_t::iterator curr, end;
 
+    for (curr = _trace_chains.begin(), end = _trace_chains.end(); curr != end;) {
       PrintF(file, "  [0, ");
 
-      const std::vector<int>& trace = *(_trace_chains[i]);
+      const chain_t& trace = curr->first;
 
       int s = trace.size();
       for (int i = s - 1; i > 0; i--) {
         PrintF(file, "%d, ", trace[i]);
       }
       PrintF(file, "%d]", trace[0]);
+
+      curr++;
+
+      if (curr != end) {
+        PrintF(file, ",\n");
+      }
+    }
+  }
+
+  {
+    PrintF(file, "\n],\n\"successors\": [\n");
+
+    chainlist_t::iterator curr, end;
+
+    int i;
+    for (curr = _trace_chains.begin(), end = _trace_chains.end(); curr != end;) {
+      i = curr->second;
+
+      PrintF(file, "  [");
+
+      const idset_t& follow = _chain_follows[i];
+      idset_t::iterator set_curr, set_end;
+
+      for (set_curr = follow.begin(), set_end = follow.end(); set_curr != set_end;) {
+        PrintF(file, "%d", *set_curr);
+        set_curr++;
+
+        if (set_curr != set_end)
+          PrintF(file, ",");
+      }
+      PrintF(file, "]");
+
+      curr++;
+
+      if (curr != end) {
+        PrintF(file, ",\n");
+      }
     }
     PrintF(file, "\n]\n}\n");
   }
+
+  PrintF(file, "\n}\n");
 
 
   fclose(file);

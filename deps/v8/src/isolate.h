@@ -1682,14 +1682,18 @@ class Isolate {
   DISALLOW_COPY_AND_ASSIGN(Isolate);
 
 public:
-  struct Chains {
-    std::set<std::vector<int>> chains;
-  };
-
   std::vector<char*> _trace_nodes;
-  std::map<int, Chains> _trace_chain_map;
-  std::vector<const std::vector<int>*> _trace_chains;
-  bool _trace_last_was_exit;
+
+  typedef std::set<int>           idset_t;
+  typedef std::vector<int>        chain_t;
+  typedef std::map<chain_t, int>  chainlist_t;
+  typedef std::vector<idset_t>    idsetlist_t;
+
+  chainlist_t                     _trace_chains;
+  idsetlist_t                     _chain_follows;
+  int                             _last_chain_id;
+
+  bool                            _trace_last_was_exit;
 
   void trace_exit();
   void trace_print();
